@@ -1,3 +1,4 @@
+import datetime
 import os
 import urllib
 from typing import List, Union
@@ -25,5 +26,26 @@ class Prometheus:
             return values[0]
         return values
 
+    async def range(self, query: str, range=datetime.timedelta(minutes=30), buckets=10):
+        end = datetime.datetime.now()
+        start = end - range
+        step = float(range.total_seconds() / buckets)
+        params = {'query': query, 'start': str(int(start.timestamp())), 'end': str(int(end.timestamp())), 'step': str(step)}
+        response = await self._client.post('query_range', data=params)
+        response.raise_for_status()
+        data = response.json()
+        if data['status'] != 'success':
+            raise Exception(f"Got a {data['status']} response for {query:r}")
+        if len(data['data']['result']) != 1:
+            raise Exception(f"Got {len(data['data']['result'])} results")
+        return [float(d[1]) for d in data['data']['result'][0]['values']]
+
 dev = Prometheus('https://prometheus.develop.mysugarcube.com', os.environ['DEV_COOKIE'])
 prod = Prometheus('https://prometheus.prod.mysugarcube.com', os.environ['PROD_COOKIE'])
+
+if __name__ == "__main__":
+    import asyncio
+    async def main():
+        values = await dev.range('sum(container_memory_working_set_bytes)')
+        print(values)
+    asyncio.run(main())

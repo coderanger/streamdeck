@@ -2,6 +2,7 @@ import asyncio
 import atexit
 import glob
 import itertools
+import logging
 import os.path
 import random
 import time
@@ -13,6 +14,8 @@ from PIL import Image, ImageSequence, ImageFont, ImageDraw
 
 import prometheus
 
+
+NOT_PRESENT = object()
 
 class Deck:
     @classmethod
@@ -29,23 +32,12 @@ class Deck:
     def __init__(self, deck):
         self._deck = deck
         self._keys = [None] * self._deck.key_count()
-        # self._image_cache = {}
         self._debounce_times = {}
 
         self._deck.open()
         self._deck.set_key_callback_async(self.callback)
         self._deck.set_brightness(1.0)
         atexit.register(self.close)
-
-    # def _load_image(self, path):
-    #     if instance(path, Image):
-    #         return to_native_format(self._deck, path.convert('RGB'))
-    #     path = os.path.abspath(path)
-    #     image = self._image_cache.get(path)
-    #     if image is None:
-    #         image = to_native_format(self._deck, Image.open(path).convert('RGB'))
-    #         self._image_cache[path] = image
-    #     return image
 
     def set_key_image(self, index, image):
         if isinstance(image, Image.Image):
@@ -186,21 +178,19 @@ class TextKey(Key):
             draw.text((x, y), self._text, self._color, font)
         deck.set_key_image(index, image)
 
-    async def set_value(self, params, deck, index):
-        if isinstance(params, str):
-            params = {'text': params}
-        if 'text' in params:
-            self._text = params['text']
-        if 'color' in params:
-            self._color = params['color']
+    async def set_value(self, deck, index, text=NOT_PRESENT, color=NOT_PRESENT):
+        if text is not NOT_PRESENT:
+            self._text = text
+        if color is not NOT_PRESENT:
+            self._color = color
         self.mount(deck, index)
 
-    async def on_press(self, deck, index):
-        # FOR TESTING
-        new_text = str(int(self._text) - 1)
-        if int(new_text) < 80:
-            self._color = 'yellow'
-        await self.set_value(new_text, deck, index)
+    # async def on_press(self, deck, index):
+    #     # FOR TESTING
+    #     new_text = str(int(self._text) - 1)
+    #     if int(new_text) < 80:
+    #         self._color = 'yellow'
+    #     await self.set_value(new_text, deck, index)
 
     def _getsize(self, font, text):
         x, y = font.getsize(text)
@@ -213,6 +203,7 @@ class TextKey(Key):
             font = font.font_variant(size=font.size-1)
             size = self._getsize(font, text)
         return (font, size)
+
 
 class EmojiKey(Key):
     def __init__(self, text, background='black', **kwargs):
@@ -228,8 +219,9 @@ class EmojiKey(Key):
         canvas.alpha_composite(self._image, ((canvas.width - self._image.width) // 2, (canvas.height - self._image.height) // 2))
         deck.set_key_image(index, canvas.convert('RGB'))
 
+
 class SparklineKey(Key):
-    def __init__(self, values, draw_height=50, line_width=1, color='white', background_upper='black', background_lower='red', **kwargs):
+    def __init__(self, values, label=None, label_spacing=5, draw_height=50, line_width=1, color='white', background_upper='black', background_lower='red', **kwargs):
         super().__init__(**kwargs)
         self._values = values
         self._draw_height = draw_height
@@ -244,6 +236,8 @@ class SparklineKey(Key):
         yoffset = (image.height - self._draw_height) // 2
         minval = min(self._values)
         maxoffset = max(self._values) - minval
+        if maxoffset == 0:
+            maxoffset = 1
         ys = [int(
                 # Scaled to 1.0-0.0
                 (1.0 - ((v - minval) / maxoffset))
@@ -262,12 +256,17 @@ class SparklineKey(Key):
         draw.line(coords, self._color, self._line_width, 'curve')
         deck.set_key_image(index, image)
 
-    async def on_press(self, deck, index):
-        # FOR TESTING
-        n = random.randint(4, 20)
-        vals = [random.randint(0, 100) for _ in range(n)]
-        self._values = vals
+    async def set_value(self, deck, index, values=NOT_PRESENT):
+        if values is not NOT_PRESENT:
+            self._values = values
         self.mount(deck, index)
+
+    # async def on_press(self, deck, index):
+    #     # FOR TESTING
+    #     n = random.randint(4, 20)
+    #     vals = [random.randint(0, 100) for _ in range(n)]
+    #     self._values = vals
+    #     self.mount(deck, index)
 
 
 class ToggleKey(Key):
@@ -283,6 +282,7 @@ class ToggleKey(Key):
         self._key.unmount(deck, index)
 
     async def on_press(self, deck, index):
+        await self._key.on_press(deck, index)
         self._key.unmount(deck, index)
         self._key = next(self._keys)
         self._key.mount(deck, index)
@@ -317,6 +317,7 @@ class PrometheusKey(Key):
         self._key.mount(deck, index)
         if self._task is None:
             self._task = asyncio.ensure_future(self.update(deck, index))
+            self._task.add_done_callback(print)
 
     def unmount(self, _, __):
         self._key.unmount(deck, index)
@@ -332,8 +333,8 @@ class PrometheusKey(Key):
 
     async def update(self, deck, index):
         while True:
-            value = await self.query()
-            await self._key.set_value(value, deck, index)
+            to_set = await self.query()
+            await self._key.set_value(deck, index, **to_set)
             await asyncio.sleep(30)
 
     async def query(self):
@@ -353,32 +354,46 @@ class PrometheusSingleStateKey(PrometheusKey):
             return {'text': str(value)}
 
 
+class PrometheusSparklineKey(PrometheusKey):
+    def __init__(self, prom, query, label, **kwargs):
+        key = SparklineKey([0, 0], label)
+        super().__init__(prom, query, key, **kwargs)
+
+    async def query(self):
+        values = await self._prom.range(self._query)
+        return {'values': values}
+
+
+
 async def init():
     deck = Deck.get()
-    deck[0] = URLKey('https://geomagical.com/', ToggleKey([
-        ImageKey('img/logo.png'),
-        ImageKey('img/logo2.png'),
-    ]))
-    deck[1] = AnimatedKey('img/gears.gif')
-    deck[2] = AnimatedKey('img/kart*.png')
-    deck[3] = ToggleKey([
-        AnimatedKey('img/kart.gif'),
-        AnimatedKey('img/kart.gif', speed=3),
-        AnimatedKey('img/taco.gif'),
-        AnimatedKey('img/charmander.gif'),
-    ])
-    deck[4] = TextKey('100')
-    deck[4+8] = TextKey('1000.0', label='Hello World Really Long')
-    deck[5+8] = PrometheusSingleStateKey(prometheus.dev, query='sum(kube_node_info)', label='Dev Nodes')
-    deck[3+8] = PrometheusSingleStateKey(prometheus.dev, query='round(sum(container_memory_working_set_bytes{namespace="pipeline"}) / 1000000000)', label='Dev RAM')
-    deck[5] = SparklineKey([0, 1, 2, 1, 4, 3])
-    deck[6] = TextKey('✨', font='Symbola.otf')
-    deck[7] = EmojiKey('✨')
-    deck[7+8] = EmojiKey('🧛‍♂️')
-    deck[6+8] = EmojiKey('🧛‍♀️')
+    deck[0] = URLKey('https://geomagical.com/', ImageKey('img/logo2.png'))
+    #deck[1] = PrometheusSingleStateKey(prometheus.dev, query='sum(kube_node_info)', label='Dev Nodes')
+    #deck[2] = PrometheusSingleStateKey(prometheus.dev, query='round(sum(container_memory_working_set_bytes{namespace="pipeline"}) / 1000000000)', label='Dev RAM')
+    #deck[3] = PrometheusSparklineKey(prometheus.dev, query='sum(avg_over_time(container_memory_working_set_bytes[5m]))', label='Dev RAM')
+    deck[8] = AnimatedKey('img/kart.gif')
+    deck[16] = AnimatedKey('img/taco.gif')
+    deck[2] = ImageKey('img/shed1.png')
+    deck[3] = ImageKey('img/shed2.png')
+    deck[4] = ImageKey('img/shed3.png')
+    deck[5] = ImageKey('img/shed4.png')
+    deck[10] = ImageKey('img/shed5.png')
+    deck[11] = ImageKey('img/shed6.png')
+    deck[12] = ImageKey('img/shed7.png')
+    deck[13] = ImageKey('img/shed8.png')
+    deck[18] = ImageKey('img/shed9.png')
+    deck[19] = ImageKey('img/shed10.png')
+    deck[20] = ImageKey('img/shed11.png')
+    deck[21] = ImageKey('img/shed12.png')
+    deck[26] = ImageKey('img/shed13.png')
+    deck[27] = ImageKey('img/shed14.png')
+    deck[28] = ImageKey('img/shed15.png')
+    deck[29] = ImageKey('img/shed16.png')
 
 def main():
+    # logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.get_event_loop()
+    # loop.set_debug(True)
     try:
         asyncio.ensure_future(init())
         loop.run_forever()
