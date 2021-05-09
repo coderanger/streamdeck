@@ -1,24 +1,26 @@
 import asyncio
+import atexit
 import json as json_lib
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, Generator
+from urllib.parse import urljoin
 
+import httpx
 from kubernetes_asyncio import client, config
 
 
-class KubernetesResponse:
-    """A helper object to make the weird 'HTTP info' return values from the K8s client look more like an httpx response object."""
+class KubernetesAuth(httpx.Auth):
+    """Auth helper for httpx to pull from a K8s config."""
 
-    def __init__(self, data: str, status: int, headers: dict[str, str]):
-        self._data = data
-        self._status = status
-        self._headers = headers
+    def __init__(self, config: client.Configuration):
+        self._config = config
 
-    def raise_for_status(self) -> None:
-        if self._status != 200:
-            raise Exception(f"Request failed {self._status}: {self._data}")
-
-    def json(self) -> Any:
-        return json_lib.loads(self._data)
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, None, None]:
+        settings = self._config.auth_settings()
+        if settings:
+            # TODO something better if one day other auth options are supported in the client lib.
+            token_settings = settings["BearerToken"]
+            request.headers[token_settings["key"]] = token_settings["value"]
+        yield request
 
 
 class Kubernetes:
@@ -30,64 +32,39 @@ class Kubernetes:
         self.loader = None
         self.reload_task = None
         self.api = None
-        self.core_v1_api = None
+        self.core_v1 = None
+        self.client = None
 
     async def load(self) -> None:
         self.loader = await config.load_kube_config(
             context=self.context, client_configuration=self.config, persist_config=False
         )
         self.reload_task = asyncio.create_task(
-            config.refresh_token(self.loader, self.config)
+            config.refresh_token(self.loader, self.config, interval=600)
         )
         self.api = client.ApiClient(configuration=self.config)
-        self.core_v1_api = client.CoreV1Api(self.api)
-
-    async def get(self, name: str, namespace: str, path: str) -> KubernetesResponse:
-        if self.core_v1_api is None:
-            raise Exception("Kubernetes client is not initialized")
-        (
-            data,
-            status,
-            headers,
-        ) = await self.core_v1_api.connect_get_namespaced_service_proxy_with_path_with_http_info(
-            name, namespace, path
+        self.core_v1 = client.CoreV1Api(self.api)
+        # Build an HTTPX client that can talk to kube-apiserver.
+        client_cert = None
+        if self.config.cert_file:
+            client_cert = (self.config.cert_file, self.config.key_file)
+        ssl_context = httpx.create_ssl_context(
+            verify=self.config.verify_ssl,
+            cert=client_cert,
         )
-        return KubernetesResponse(data, status, headers)
-
-    async def post(
-        self,
-        name: str,
-        namespace: str,
-        path: str,
-        data: Optional[Union[str, dict]] = None,
-        json: Optional[Any] = None,
-    ) -> KubernetesResponse:
-        # There is a connect_post_namespaced_service_proxy_with_path but it doesn't allow setting a body.
-        if data is not None and json is not None:
-            raise ValueError("cannot pass both body and json")
-        if json is not None:
-            data = json_lib.dumps(json)
-        post_params = {}
-        body = data
-        if isinstance(data, dict):
-            post_params = data
-            body = None
-
-        data, status, headers = await self.api.call_api(
-            "/api/v1/namespaces/{namespace}/services/{name}/proxy/{path}",
-            "POST",
-            {"name": name, "namespace": namespace, "path": path},
-            {},
-            {"Accept": "*/*", "Content-Type": "application/x-www-form-urlencoded"},
-            body=body,
-            post_params=post_params,
-            response_type="str",
-            auth_settings=["BearerToken"],
-            async_req=False,
-            _return_http_data_only=False,
+        if self.config.ssl_ca_cert:
+            ssl_context.load_verify_locations(cafile=self.config.ssl_ca_cert)
+        self.client = httpx.AsyncClient(
+            auth=KubernetesAuth(self.config),
+            base_url=urljoin(self.config.host, "api/"),
+            verify=ssl_context,
         )
-        print(repr(data))
-        return KubernetesResponse(data, status, headers)
+
+    def proxy_request(
+        self, method: str, name: str, namespace: str, path: str, *args, **kwargs
+    ) -> httpx.Response:
+        url = f"v1/namespaces/{namespace}/services/{name}/proxy/{path.lstrip('/')}"
+        return self.client.request(method, url, *args, **kwargs)
 
     def for_service(self, name: str, namespace: str) -> "ScopedKubernetes":
         return ScopedKubernetes(self, name, namespace)
@@ -101,16 +78,15 @@ class ScopedKubernetes:
         self._name = name
         self._namespace = namespace
 
-    def get(self, path: str) -> KubernetesResponse:
-        return self._parent.get(name=self._name, namespace=self._namespace, path=path)
+    def get(self, path: str, *args, **kwargs) -> httpx.Response:
+        return self._parent.proxy_request(
+            "GET", self._name, self._namespace, path, *args, **kwargs
+        )
 
-    def post(
-        self,
-        path: str,
-        data: Optional[Union[str, dict]] = None,
-        json: Optional[Any] = None,
-    ) -> KubernetesResponse:
-        return self._parent.post(self._name, self._namespace, path, data, json)
+    def post(self, path: str, *args, **kwargs) -> httpx.Response:
+        return self._parent.proxy_request(
+            "POST", self._name, self._namespace, path, *args, **kwargs
+        )
 
 
 dev = Kubernetes("wallspice-develop")

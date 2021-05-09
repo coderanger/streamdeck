@@ -389,7 +389,7 @@ class PrometheusKey(Key):
         raise NotImplementedError
 
 
-class PrometheusSingleStateKey(PrometheusKey):
+class PrometheusSingleStatKey(PrometheusKey):
     def __init__(self, prom, query, label, **kwargs):
         key = TextKey("", label)
         super().__init__(prom, query, key, **kwargs)
@@ -416,11 +416,19 @@ async def init():
     await kubernetes.load_all()
     deck = Deck.get()
     deck[0] = URLKey("https://geomagical.com/", ImageKey("img/logo2.png"))
-    deck[1] = PrometheusSingleStateKey(
+    deck[1] = PrometheusSingleStatKey(
         prometheus.dev, query="sum(kube_node_info)", label="Dev Nodes"
     )
-    # deck[2] = PrometheusSingleStateKey(prometheus.dev, query='round(sum(container_memory_working_set_bytes{namespace="pipeline"}) / 1000000000)', label='Dev RAM')
-    # deck[3] = PrometheusSparklineKey(prometheus.dev, query='sum(avg_over_time(container_memory_working_set_bytes[5m]))', label='Dev RAM')
+    deck[2] = PrometheusSingleStatKey(
+        prometheus.dev,
+        query='round(sum(container_memory_working_set_bytes{namespace="pipeline"}) / 1000000000)',
+        label="Dev RAM",
+    )
+    deck[3] = PrometheusSparklineKey(
+        prometheus.dev,
+        query="sum(avg_over_time(container_memory_working_set_bytes[5m]))",
+        label="Dev RAM",
+    )
     deck[8] = AnimatedKey("img/kart.gif")
     deck[16] = AnimatedKey("img/taco.gif")
     # deck[2] = ImageKey('img/shed1.png')
