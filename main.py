@@ -5,6 +5,7 @@ import itertools
 import logging
 import os.path
 import random
+import sys
 import time
 import webbrowser
 
@@ -12,10 +13,14 @@ from StreamDeck.DeviceManager import DeviceManager
 from StreamDeck.ImageHelpers.PILHelper import to_native_format, create_image
 from PIL import Image, ImageSequence, ImageFont, ImageDraw
 
-import prometheus
+# For now.
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)) + "/src")
+
+from code_deck import kubernetes, prometheus
 
 
 NOT_PRESENT = object()
+
 
 class Deck:
     @classmethod
@@ -26,7 +31,7 @@ class Deck:
     def get(cls):
         decks = cls.enumerate()
         if len(decks) != 1:
-            raise ValueError(f'Did not find exactly one deck: {decks}')
+            raise ValueError(f"Did not find exactly one deck: {decks}")
         return decks[0]
 
     def __init__(self, deck):
@@ -63,7 +68,7 @@ class Deck:
         last = self._debounce_times.get((index, state))
         if last is not None:
             since = now - last
-            if since < 0.05: # 50ms
+            if since < 0.05:  # 50ms
                 return
         self._debounce_times[(index, state)] = now
 
@@ -104,7 +109,7 @@ class ImageKey(Key):
     def __init__(self, image, **kwargs):
         super().__init__(**kwargs)
         if isinstance(image, str):
-            image = Image.open(image).convert('RGB')
+            image = Image.open(image).convert("RGB")
         self._image = image
 
     def mount(self, deck, index):
@@ -119,17 +124,22 @@ class AnimatedKey(Key):
             paths = glob.glob(paths)
             paths.sort()
         # Load a GIF.
-        if len(paths) == 1 and paths[0].endswith('.gif'):
+        if len(paths) == 1 and paths[0].endswith(".gif"):
             speed = speed or 1
-            frame_source = ((f, f.info['duration'] / speed) for f in ImageSequence.Iterator(Image.open(paths[0])))
+            frame_source = (
+                (f, f.info["duration"] / speed)
+                for f in ImageSequence.Iterator(Image.open(paths[0]))
+            )
         else:
             speed = speed or 50
             frame_source = ((Image.open(p), speed) for p in paths)
-        self._frames = [(f.convert('RGB'), d) for f, d in frame_source]
+        self._frames = [(f.convert("RGB"), d) for f, d in frame_source]
         self._task = None
 
     def mount(self, deck, index):
-        self._native_frames = itertools.cycle((to_native_format(deck._deck, f), d) for f, d in self._frames)
+        self._native_frames = itertools.cycle(
+            (to_native_format(deck._deck, f), d) for f, d in self._frames
+        )
         if self._task is None:
             self._task = asyncio.ensure_future(self.update(deck, index))
 
@@ -146,13 +156,27 @@ class AnimatedKey(Key):
 
 
 class TextKey(Key):
-    def __init__(self, text, label=None, label_spacing=5, size=50, label_size=20, font='Roboto-Regular.ttf', color='white', label_color=None, background='black', **kwargs):
+    def __init__(
+        self,
+        text,
+        label=None,
+        label_spacing=5,
+        size=50,
+        label_size=20,
+        font="Roboto-Regular.ttf",
+        color="white",
+        label_color=None,
+        background="black",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self._text = text
         self._label = label
         self._label_spacing = label_spacing
         self._font = ImageFont.truetype(f"fonts/{font}", size)
-        self._label_font = self._font.font_variant(size=label_size) #ImageFont.truetype(f"fonts/{font}", label_size)
+        self._label_font = self._font.font_variant(
+            size=label_size
+        )  # ImageFont.truetype(f"fonts/{font}", label_size)
         self._color = color
         self._label_color = label_color or color
         self._background = background
@@ -164,7 +188,9 @@ class TextKey(Key):
         font, size = self._fit_font(self._font, self._text, fit_width)
 
         if self._label:
-            label_font, label_size = self._fit_font(self._label_font, self._label, fit_width)
+            label_font, label_size = self._fit_font(
+                self._label_font, self._label, fit_width
+            )
             total_height = size[1] + label_size[1] + self._label_spacing
             label_y = (image.height - total_height) // 2
             y = label_y + label_size[1] + self._label_spacing
@@ -200,28 +226,45 @@ class TextKey(Key):
     def _fit_font(self, font, text, width):
         size = None
         while (size is None or size[0] > width) and font.size >= 15:
-            font = font.font_variant(size=font.size-1)
+            font = font.font_variant(size=font.size - 1)
             size = self._getsize(font, text)
         return (font, size)
 
 
 class EmojiKey(Key):
-    def __init__(self, text, background='black', **kwargs):
+    def __init__(self, text, background="black", **kwargs):
         super().__init__(**kwargs)
-        codepoints = '-'.join(f"{ord(c):x}" for c in text)
+        codepoints = "-".join(f"{ord(c):x}" for c in text)
         path = f"twemoji/{codepoints}.png"
-        self._image = Image.open(path).convert('RGBA')
+        self._image = Image.open(path).convert("RGBA")
         self._background = background
 
     def mount(self, deck, index):
         image_format = deck.key_image_format()
-        canvas = Image.new('RGBA', image_format['size'], self._background)
-        canvas.alpha_composite(self._image, ((canvas.width - self._image.width) // 2, (canvas.height - self._image.height) // 2))
-        deck.set_key_image(index, canvas.convert('RGB'))
+        canvas = Image.new("RGBA", image_format["size"], self._background)
+        canvas.alpha_composite(
+            self._image,
+            (
+                (canvas.width - self._image.width) // 2,
+                (canvas.height - self._image.height) // 2,
+            ),
+        )
+        deck.set_key_image(index, canvas.convert("RGB"))
 
 
 class SparklineKey(Key):
-    def __init__(self, values, label=None, label_spacing=5, draw_height=50, line_width=1, color='white', background_upper='black', background_lower='red', **kwargs):
+    def __init__(
+        self,
+        values,
+        label=None,
+        label_spacing=5,
+        draw_height=50,
+        line_width=1,
+        color="white",
+        background_upper="black",
+        background_lower="red",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self._values = values
         self._draw_height = draw_height
@@ -238,7 +281,8 @@ class SparklineKey(Key):
         maxoffset = max(self._values) - minval
         if maxoffset == 0:
             maxoffset = 1
-        ys = [int(
+        ys = [
+            int(
                 # Scaled to 1.0-0.0
                 (1.0 - ((v - minval) / maxoffset))
                 # Scaled to 0-draw_height
@@ -246,14 +290,18 @@ class SparklineKey(Key):
                 # To absolute Y.
                 + yoffset
             )
-            for v in self._values]
+            for v in self._values
+        ]
         xstep = image.width / (len(self._values) - 1)
         xs = [int(xstep * i) for i in range(len(self._values))]
         coords = list(zip(xs, ys))
         # Draw the bottom section.
-        draw.polygon(coords + [(image.width, image.height), (0, image.height)], self._background_lower)
+        draw.polygon(
+            coords + [(image.width, image.height), (0, image.height)],
+            self._background_lower,
+        )
         # Draw the line.
-        draw.line(coords, self._color, self._line_width, 'curve')
+        draw.line(coords, self._color, self._line_width, "curve")
         deck.set_key_image(index, image)
 
     async def set_value(self, deck, index, values=NOT_PRESENT):
@@ -343,15 +391,15 @@ class PrometheusKey(Key):
 
 class PrometheusSingleStateKey(PrometheusKey):
     def __init__(self, prom, query, label, **kwargs):
-        key = TextKey('', label)
+        key = TextKey("", label)
         super().__init__(prom, query, key, **kwargs)
 
     async def query(self):
         value = await self._prom.instant(self._query)
         if isinstance(value, float):
-            return {'text', f"{value:.2f}"}
+            return {"text", f"{value:.2f}"}
         else:
-            return {'text': str(value)}
+            return {"text": str(value)}
 
 
 class PrometheusSparklineKey(PrometheusKey):
@@ -361,34 +409,37 @@ class PrometheusSparklineKey(PrometheusKey):
 
     async def query(self):
         values = await self._prom.range(self._query)
-        return {'values': values}
-
+        return {"values": values}
 
 
 async def init():
+    await kubernetes.load_all()
     deck = Deck.get()
-    deck[0] = URLKey('https://geomagical.com/', ImageKey('img/logo2.png'))
-    #deck[1] = PrometheusSingleStateKey(prometheus.dev, query='sum(kube_node_info)', label='Dev Nodes')
-    #deck[2] = PrometheusSingleStateKey(prometheus.dev, query='round(sum(container_memory_working_set_bytes{namespace="pipeline"}) / 1000000000)', label='Dev RAM')
-    #deck[3] = PrometheusSparklineKey(prometheus.dev, query='sum(avg_over_time(container_memory_working_set_bytes[5m]))', label='Dev RAM')
-    deck[8] = AnimatedKey('img/kart.gif')
-    deck[16] = AnimatedKey('img/taco.gif')
-    deck[2] = ImageKey('img/shed1.png')
-    deck[3] = ImageKey('img/shed2.png')
-    deck[4] = ImageKey('img/shed3.png')
-    deck[5] = ImageKey('img/shed4.png')
-    deck[10] = ImageKey('img/shed5.png')
-    deck[11] = ImageKey('img/shed6.png')
-    deck[12] = ImageKey('img/shed7.png')
-    deck[13] = ImageKey('img/shed8.png')
-    deck[18] = ImageKey('img/shed9.png')
-    deck[19] = ImageKey('img/shed10.png')
-    deck[20] = ImageKey('img/shed11.png')
-    deck[21] = ImageKey('img/shed12.png')
-    deck[26] = ImageKey('img/shed13.png')
-    deck[27] = ImageKey('img/shed14.png')
-    deck[28] = ImageKey('img/shed15.png')
-    deck[29] = ImageKey('img/shed16.png')
+    deck[0] = URLKey("https://geomagical.com/", ImageKey("img/logo2.png"))
+    deck[1] = PrometheusSingleStateKey(
+        prometheus.dev, query="sum(kube_node_info)", label="Dev Nodes"
+    )
+    # deck[2] = PrometheusSingleStateKey(prometheus.dev, query='round(sum(container_memory_working_set_bytes{namespace="pipeline"}) / 1000000000)', label='Dev RAM')
+    # deck[3] = PrometheusSparklineKey(prometheus.dev, query='sum(avg_over_time(container_memory_working_set_bytes[5m]))', label='Dev RAM')
+    deck[8] = AnimatedKey("img/kart.gif")
+    deck[16] = AnimatedKey("img/taco.gif")
+    # deck[2] = ImageKey('img/shed1.png')
+    # deck[3] = ImageKey('img/shed2.png')
+    # deck[4] = ImageKey('img/shed3.png')
+    # deck[5] = ImageKey('img/shed4.png')
+    # deck[10] = ImageKey('img/shed5.png')
+    # deck[11] = ImageKey('img/shed6.png')
+    # deck[12] = ImageKey('img/shed7.png')
+    # deck[13] = ImageKey('img/shed8.png')
+    # deck[18] = ImageKey('img/shed9.png')
+    # deck[19] = ImageKey('img/shed10.png')
+    # deck[20] = ImageKey('img/shed11.png')
+    # deck[21] = ImageKey('img/shed12.png')
+    # deck[26] = ImageKey('img/shed13.png')
+    # deck[27] = ImageKey('img/shed14.png')
+    # deck[28] = ImageKey('img/shed15.png')
+    # deck[29] = ImageKey('img/shed16.png')
+
 
 def main():
     # logging.basicConfig(level=logging.DEBUG)
@@ -398,11 +449,11 @@ def main():
         asyncio.ensure_future(init())
         loop.run_forever()
     except KeyboardInterrupt:
-        pass # Exiting cleanly.
+        pass  # Exiting cleanly.
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
