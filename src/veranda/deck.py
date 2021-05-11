@@ -9,11 +9,12 @@ import random
 import sys
 import time
 import webbrowser
+
 from urllib.parse import urlencode
 
+from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from StreamDeck.DeviceManager import DeviceManager
-from StreamDeck.ImageHelpers.PILHelper import to_native_format, create_image
-from PIL import Image, ImageSequence, ImageFont, ImageDraw
+from StreamDeck.ImageHelpers.PILHelper import create_image, to_native_format
 
 
 NOT_PRESENT = object()

@@ -2,7 +2,7 @@ import asyncio
 
 from . import kubernetes
 from .deck import Deck
-from .keys import URLKey, PrometheusSingleStatKey, PrometheusSparklineKey, AnimatedKey
+from .keys import AnimatedKey, PrometheusSingleStatKey, PrometheusSparklineKey, URLKey
 
 
 async def init():
