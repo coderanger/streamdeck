@@ -40,7 +40,7 @@ class Kubernetes:
             context=self.context, client_configuration=self.config, persist_config=False
         )
         self.reload_task = asyncio.create_task(
-            config.refresh_token(self.loader, self.config, interval=600)
+            config.refresh_token(self.loader, self.config)
         )
         self.api = client.ApiClient(configuration=self.config)
         self.core_v1 = client.CoreV1Api(self.api)

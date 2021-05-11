@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=40.6.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.coverage.run]
+parallel = true
+branch = true
+source = ["src"]
+omit = ["*/tests.py", "*/test/*", "*/test_*.py", "*/tests_*.py", "*_tests.py"]
+
+[tool.coverage.paths]
+source = ["src", ".tox/*/site-packages"]
+
+[tool.isort]
+atomic = true
+force_grid_wrap = 0
+include_trailing_comma = true
+lines_after_imports = 2
+lines_between_types = 1
+multi_line_output = 3
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+
+known_first_party=["veranda"]
+
+[tool.pytest.ini_options]
+python_files = ["tests.py", "test_*.py", "tests_*.py", "*_tests.py"]
+addopts = "-ra -q --cov=veranda --cov=tests --cov-config=pyproject.toml --cov-report=html --cov-fail-under=70"
