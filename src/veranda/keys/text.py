@@ -1,22 +1,7 @@
-import asyncio
-import atexit
-import glob
-import itertools
-import json
-import logging
-import os.path
-import random
-import sys
-import time
-import webbrowser
+from PIL import ImageDraw, ImageFont
+from StreamDeck.ImageHelpers.PILHelper import create_image
 
-from urllib.parse import urlencode
-
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
-from StreamDeck.DeviceManager import DeviceManager
-from StreamDeck.ImageHelpers.PILHelper import create_image, to_native_format
-
-from .base import Key
+from .base import NOT_PRESENT, Key
 
 
 class TextKey(Key):
@@ -84,7 +69,8 @@ class TextKey(Key):
 
     def _getsize(self, font, text):
         x, y = font.getsize(text)
-        # The approximated 0.21 correct factor to offset that getsize is based on max glypy height, found via https://stackoverflow.com/questions/55773962/pillow-how-to-put-the-text-in-the-center-of-the-image
+        # The approximated 0.21 correct factor to offset that getsize is based on max glyph height, found via
+        # https://stackoverflow.com/questions/55773962/pillow-how-to-put-the-text-in-the-center-of-the-image
         return (x, int(y * 1.21))
 
     def _fit_font(self, font, text, width):

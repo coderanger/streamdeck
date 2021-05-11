@@ -1,8 +1,14 @@
 import asyncio
 
-from . import kubernetes
+from . import kubernetes, prometheus
 from .deck import Deck
-from .keys import AnimatedKey, PrometheusSingleStatKey, PrometheusSparklineKey, URLKey
+from .keys import (
+    AnimatedKey,
+    ImageKey,
+    PrometheusSingleStatKey,
+    PrometheusSparklineKey,
+    URLKey,
+)
 
 
 async def init():
@@ -16,12 +22,24 @@ async def init():
     )
     deck[2] = PrometheusSingleStatKey(
         prometheus.thanos_prod,
-        query='round(sum(container_memory_working_set_bytes{namespace="pipeline", k8s_cluster="wallspice-develop"}) / 1000000000)',
+        query="""
+            round(
+                sum(
+                    container_memory_working_set_bytes{namespace="pipeline", k8s_cluster="wallspice-develop"}
+                ) / 1000000000
+            )
+            """,
         label="Dev RAM",
     )
     deck[3] = PrometheusSparklineKey(
         prometheus.thanos_prod,
-        query='sum(avg_over_time(container_memory_working_set_bytes{namespace="pipeline", k8s_cluster="wallspice-develop"}[5m]))',
+        query="""
+            sum(
+                avg_over_time(
+                    container_memory_working_set_bytes{namespace="pipeline", k8s_cluster="wallspice-develop"}[5m]
+                )
+            )
+            """,
         label="Dev RAM",
     )
 

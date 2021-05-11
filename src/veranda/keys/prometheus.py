@@ -1,22 +1,9 @@
 import asyncio
-import atexit
-import glob
-import itertools
-import json
-import logging
-import os.path
-import random
-import sys
-import time
-import webbrowser
-
-from urllib.parse import urlencode
-
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
-from StreamDeck.DeviceManager import DeviceManager
-from StreamDeck.ImageHelpers.PILHelper import create_image, to_native_format
 
 from .base import Key
+from .chart import SparklineKey
+from .text import TextKey
+from .url import GrafanaExploreURLKey
 
 
 class PrometheusKey(Key):
@@ -33,7 +20,7 @@ class PrometheusKey(Key):
             self._task = asyncio.ensure_future(self.update(deck, index))
             self._task.add_done_callback(print)
 
-    def unmount(self, _, __):
+    def unmount(self, deck, index):
         self._key.unmount(deck, index)
         if self._task is not None:
             self._task.cancel()

@@ -1,7 +1,11 @@
-from .chart import SparklineKey
-from .emoji import EmojiKey
-from .image import AnimatedKey, ImageKey
-from .prometheus import PrometheusKey, PrometheusSingleStatKey, PrometheusSparklineKey
-from .text import TextKey
-from .toggle import ToggleKey
-from .url import GrafanaExploreURLKey, URLKey
+from .chart import SparklineKey  # noqa F401
+from .emoji import EmojiKey  # noqa F401
+from .image import AnimatedKey, ImageKey  # noqa F401
+from .prometheus import (  # noqa F401
+    PrometheusKey,
+    PrometheusSingleStatKey,
+    PrometheusSparklineKey,
+)
+from .text import TextKey  # noqa F401
+from .toggle import ToggleKey  # noqa F401
+from .url import GrafanaExploreURLKey, URLKey  # noqa F401

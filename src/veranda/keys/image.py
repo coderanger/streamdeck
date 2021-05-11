@@ -1,20 +1,9 @@
 import asyncio
-import atexit
 import glob
 import itertools
-import json
-import logging
-import os.path
-import random
-import sys
-import time
-import webbrowser
 
-from urllib.parse import urlencode
-
-from PIL import Image, ImageDraw, ImageFont, ImageSequence
-from StreamDeck.DeviceManager import DeviceManager
-from StreamDeck.ImageHelpers.PILHelper import create_image, to_native_format
+from PIL import Image, ImageSequence
+from StreamDeck.ImageHelpers.PILHelper import to_native_format
 
 from .base import Key
 

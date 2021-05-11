@@ -1,8 +1,6 @@
 import asyncio
-import atexit
-import json as json_lib
 
-from typing import Any, Generator, Optional, Union
+from typing import Generator
 from urllib.parse import urljoin
 
 import httpx
