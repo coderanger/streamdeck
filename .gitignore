@@ -1,1 +1,3 @@
 .envrc
+.coverage
+*.egg-info

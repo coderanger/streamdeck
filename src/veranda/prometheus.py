@@ -1,11 +1,9 @@
 import datetime
-import os
-import urllib
+
 from typing import List, Union
 
-import httpx
-
 from . import kubernetes
+
 
 Number = Union[int, float]
 
@@ -45,8 +43,16 @@ class Prometheus:
         return [float(d[1]) for d in data["data"]["result"][0]["values"]]
 
 
+class Thanos(Prometheus):
+    def __init__(self, kubernetes: kubernetes.Kubernetes):
+        super().__init__(kubernetes)
+        self._client = kubernetes.for_service("query:http", "thanos")
+
+
 dev = Prometheus(kubernetes.dev)
 prod = Prometheus(kubernetes.prod)
+thanos_dev = Thanos(kubernetes.dev)
+thanos_prod = Thanos(kubernetes.prod)
 
 if __name__ == "__main__":
     import asyncio
