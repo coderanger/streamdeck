@@ -18,7 +18,7 @@ class PrometheusKey(Key):
         self._key.mount(deck, index)
         if self._task is None:
             self._task = asyncio.ensure_future(self.update(deck, index))
-            self._task.add_done_callback(print)
+            # self._task.add_done_callback(print)
 
     def unmount(self, deck, index):
         self._key.unmount(deck, index)

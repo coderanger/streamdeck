@@ -1,6 +1,7 @@
 from .chart import SparklineKey  # noqa F401
 from .emoji import EmojiKey  # noqa F401
 from .image import AnimatedKey, ImageKey  # noqa F401
+from .power import PowerKey  # noqa F401
 from .prometheus import (  # noqa F401
     PrometheusKey,
     PrometheusSingleStatKey,
