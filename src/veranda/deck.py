@@ -75,13 +75,18 @@ class Deck:
         self._scenes[0].mount(self)
         self._debounce_times = {}
 
+        # Open the connection!
         self._deck.open()
-        self._deck.set_key_callback_async(self.callback)
-        self._deck.set_brightness(1.0)
-        atexit.register(self.close)
 
-        # Store the key count for use elsewhere.
+        # Store the key info for use elsewhere.
         self.key_count = deck.key_count()
+        self.key_layout = deck.key_layout()
+        self.key_size = deck.key_image_format()["size"]
+
+        # Initialize the display and hooks.
+        self.clear()
+        self._deck.set_key_callback_async(self.callback)
+        atexit.register(self.close)
 
     def set_key_image(self, index, image):
         if isinstance(image, Image.Image):
@@ -90,6 +95,23 @@ class Deck:
 
     def key_image_format(self):
         return self._deck.key_image_format()
+
+    def key_rect(self, index: int) -> tuple[float, float, float, float]:
+        """Return the rectangle for a given index in global coordinates. (0,0) is the top-left
+        corner of the top-left key. Rect is in PIL (left, top, right, bottom) format.
+        """
+        y, x = divmod(index, self.key_layout[1])
+        return (
+            x * self.key_size[0],  # left
+            y * self.key_size[1],  # top
+            (x + 1) * self.key_size[0],  # right
+            (y + 1) * self.key_size[1],  # bottom
+        )
+
+    def clear(self, brightness: float = 1.0):
+        for i in range(self.key_count):
+            self.set_key_image(i, None)
+        self.set_brightness(brightness)
 
     def set_brightness(self, brightness: float):
         self._deck.set_brightness(brightness)
@@ -111,6 +133,15 @@ class Deck:
         self._scenes[-1].unmount(self)
         self._scenes.pop(-1)
         self._scenes[-1].mount(self)
+
+    def replace_scene(self, scene: Scene) -> None:
+        """Pop and push a new scene without running the intermediary mounts."""
+        if len(self._scenes) <= 1:
+            raise Exception("No scene to pop")
+        self._scenes[-1].unmount(self)
+        self._scenes.pop(-1)
+        self._scenes.append(scene)
+        scene.mount(self)
 
     async def callback(self, _deck, index, state):
         # Check for a debounce timer.

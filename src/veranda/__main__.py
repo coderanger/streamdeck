@@ -5,11 +5,25 @@ from .deck import Deck, Scene
 from .keys import (
     AnimatedKey,
     ImageKey,
+    MenuKey,
+    PopSceneKey,
     PowerKey,
     PrometheusSingleStatKey,
     PrometheusSparklineKey,
+    TextKey,
     URLKey,
 )
+
+
+class NumberScene(Scene):
+    keys = {
+        0: PopSceneKey(TextKey("0")),
+        1: TextKey("1"),
+        2: TextKey("2"),
+        3: TextKey("3"),
+        4: TextKey("4"),
+        5: TextKey("5"),
+    }
 
 
 class InitialScene(Scene):
@@ -54,6 +68,7 @@ class InitialScene(Scene):
         ),
         8: AnimatedKey("img/kart.gif"),
         16: AnimatedKey("img/taco.gif"),
+        17: MenuKey(TextKey("Test Menu"), NumberScene()),
         31: PowerKey(),
     }
 
