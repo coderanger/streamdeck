@@ -46,10 +46,11 @@ class AnimatedKey(Key):
         if self._task is None:
             self._task = asyncio.ensure_future(self.update(deck, index))
 
-    def unmount(self, _, __):
+    def unmount(self, deck, index):
         if self._task is not None:
             self._task.cancel()
             self._task = None
+        super().unmount(deck, index)
 
     async def update(self, deck, index):
         while True:

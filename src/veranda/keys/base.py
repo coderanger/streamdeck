@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
 
 class Key(ABC):
@@ -14,9 +14,8 @@ class Key(ABC):
     def mount(self, deck, index):
         pass
 
-    # @abstractmethod
     def unmount(self, deck, index):
-        pass
+        deck.set_key_image(index, None)
 
     # @abstractmethod
     async def set_value(self, deck, index, value):
