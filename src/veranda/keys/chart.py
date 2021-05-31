@@ -19,6 +19,8 @@ class SparklineKey(Key):
     ):
         super().__init__(**kwargs)
         self._values = values
+        self._label = label
+        self._label_spacing = label_spacing
         self._draw_height = draw_height
         self._line_width = line_width
         self._color = color

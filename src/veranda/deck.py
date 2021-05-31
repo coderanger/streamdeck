@@ -1,10 +1,18 @@
+from __future__ import annotations
+
 import atexit
 import copy
 import time
 
+from typing import TYPE_CHECKING, Optional
+
 from PIL import Image
 from StreamDeck.DeviceManager import DeviceManager
 from StreamDeck.ImageHelpers.PILHelper import to_native_format
+
+
+if TYPE_CHECKING:
+    from .keys.base import Key
 
 
 class Scene:
@@ -15,10 +23,10 @@ class Scene:
         # Only set while mounted.
         self._deck = None
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Optional[Key]:
         return self._keys.get(index)
 
-    def __setitem__(self, index, key):
+    def __setitem__(self, index: int, key: Key) -> None:
         if self._deck is not None:
             old_key = self._keys.get(index)
             if old_key is not None:
@@ -31,7 +39,7 @@ class Scene:
         if self._deck is not None:
             raise Exception("Scene is already mounted")
         self._deck = deck
-        for index, key in self._keys.items():
+        for index, key in list(self._keys.items()):
             if key is not None:
                 key.mount(deck, index)
 
@@ -58,6 +66,12 @@ class Scene:
 
 
 class Deck:
+    # Pixels between keys in the X direction.
+    X_PADDING = 34
+
+    # Pixels between keys in the Y direction.
+    Y_PADDING = X_PADDING
+
     @classmethod
     def enumerate(cls):
         return [cls(deck) for deck in DeviceManager().enumerate()]
@@ -101,11 +115,13 @@ class Deck:
         corner of the top-left key. Rect is in PIL (left, top, right, bottom) format.
         """
         y, x = divmod(index, self.key_layout[1])
+        padded_x = self.key_size[0] + self.X_PADDING
+        padded_y = self.key_size[1] + self.Y_PADDING
         return (
-            x * self.key_size[0],  # left
-            y * self.key_size[1],  # top
-            (x + 1) * self.key_size[0],  # right
-            (y + 1) * self.key_size[1],  # bottom
+            x * padded_x,  # left
+            y * padded_y,  # top
+            ((x + 1) * padded_x) - self.X_PADDING,  # right
+            ((y + 1) * padded_y) - self.Y_PADDING,  # bottom
         )
 
     def clear(self, brightness: float = 1.0):
@@ -127,11 +143,11 @@ class Deck:
         self._scenes.append(scene)
         scene.mount(self)
 
-    def pop_scene(self):
-        if len(self._scenes) <= 1:
+    def pop_scene(self, n: int = 1):
+        if len(self._scenes) <= n:
             raise Exception("No scene to pop")
         self._scenes[-1].unmount(self)
-        self._scenes.pop(-1)
+        del self._scenes[-1 * n :]
         self._scenes[-1].mount(self)
 
     def replace_scene(self, scene: Scene) -> None:

@@ -10,7 +10,7 @@ from .base import Key
 
 
 class MenuKey(Key):
-    def __init__(self, key: Key, scene: Scene):
+    def __init__(self, key: Key, scene: Optional[Scene] = None):
         super().__init__()
         self._key = key
         self._scene = scene
@@ -26,7 +26,7 @@ class MenuKey(Key):
 
 
 class PopSceneKey(Key):
-    def __init__(self, key: Key):
+    def __init__(self, key: Optional[Key] = None):
         super().__init__()
         self._key = key
 
@@ -34,28 +34,30 @@ class PopSceneKey(Key):
         deck.pop_scene()
 
     def mount(self, deck, index):
-        self._key.mount(deck, index)
+        if self._key is not None:
+            self._key.mount(deck, index)
 
     def unmount(self, deck, index):
-        self._key.unmount(deck, index)
+        if self._key is not None:
+            self._key.unmount(deck, index)
 
 
 class MenuAnimationScene(Scene):
-    animation_speed = 0.0000000025
+    animation_speed = 0.000000004
     background_color = ImageColor.getrgb("black")
     line_color = ImageColor.getrgb("white")
 
     _animation_image: Optional[Image.Image]
     _draw: Optional[ImageDraw.ImageDraw]
 
-    def __init__(self, origin_key: Key, origin_index: int, next_scene: Scene):
+    def __init__(self, origin_key: Key, origin_index: int, next_scene: Optional[Scene]):
         super().__init__()
         self._origin_key = origin_key
         self._origin_index = origin_index
         self._next_scene = next_scene
         self._task = None
 
-    def mount(self, deck: Deck):
+    def mount(self, deck: Deck) -> None:
         # Create the overall image canvas.
         self._animation_image = Image.new(
             "RGB",
@@ -70,12 +72,12 @@ class MenuAnimationScene(Scene):
             self._task = asyncio.ensure_future(self.update(deck))
         super().mount(deck)
 
-    def unmount(self, _):
+    def unmount(self, _) -> None:
         if self._task is not None:
             self._task.cancel()
             self._task = None
 
-    async def update(self, deck: Deck):
+    async def update(self, deck: Deck) -> None:
         # Work out the start and end states to tween.
         start_rect = deck.key_rect(self._origin_index)
         end_rect = (
@@ -84,6 +86,8 @@ class MenuAnimationScene(Scene):
             self._animation_image.width,  # right
             self._animation_image.height,  # bottom
         )
+        if self._next_scene is None:
+            start_rect, end_rect = end_rect, start_rect
 
         # Simple lerp tween.
         def tween(v0: float, v1: float, t: float) -> float:
@@ -130,4 +134,7 @@ class MenuAnimationScene(Scene):
         # Animation complete, advance.
         deck.clear()
         self._task = None
-        deck.replace_scene(self._next_scene)
+        if self._next_scene is None:
+            deck.pop_scene(2)
+        else:
+            deck.replace_scene(self._next_scene)

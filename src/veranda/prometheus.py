@@ -13,15 +13,15 @@ class Prometheus:
         self._client = kubernetes.for_service("prometheus-operated:web", "prometheus")
 
     async def instant(self, query: str) -> Union[Number, List[Number]]:
-        response = await self._client.post("api/v1/query", data={"query": query})
-        response.raise_for_status()
-        data = response.json()
-        if data["status"] != "success":
-            raise Exception(f"Got a {data['status']} response for {query:r}")
-        values = [d["value"][1] for d in data["data"]["result"]]
+        results = await self._request("query", data={"query": query})
+        values = [d["value"][1] for d in results]
         if len(values) == 1:
             return values[0]
         return values
+
+    async def instant_by_label(self, query: str, label: str) -> dict[str, Number]:
+        results = await self._request("query", data={"query": query})
+        return {d["metric"][label]: d["value"][1] for d in results}
 
     async def range(self, query: str, range=datetime.timedelta(minutes=30), buckets=10):
         end = datetime.datetime.now()
@@ -33,14 +33,20 @@ class Prometheus:
             "end": str(int(end.timestamp())),
             "step": str(step),
         }
-        response = await self._client.post("api/v1/query_range", data=params)
+        results = await self._request("query_range", params)
+        if len(results) != 1:
+            raise Exception(f"Got {len(results)} results")
+        return [float(d[1]) for d in results[0]["values"]]
+
+    async def _request(self, url: str, data: dict) -> Union[dict, list]:
+        """Make a request to the Prometheus API."""
+        response = await self._client.post(f"api/v1/{url}", data=data)
         response.raise_for_status()
         data = response.json()
         if data["status"] != "success":
+            query = data.get("query")
             raise Exception(f"Got a {data['status']} response for {query:r}")
-        if len(data["data"]["result"]) != 1:
-            raise Exception(f"Got {len(data['data']['result'])} results")
-        return [float(d[1]) for d in data["data"]["result"][0]["values"]]
+        return data["data"]["result"]
 
 
 class Thanos(Prometheus):
