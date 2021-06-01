@@ -8,34 +8,17 @@ from .url import GrafanaExploreURLKey
 
 class PrometheusKey(Key):
     def __init__(self, prom, query, key, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(
+            key=GrafanaExploreURLKey("https://grafana.mysugarcube.com", query, key),
+            **kwargs,
+        )
         self._prom = prom
         self._query = query
-        self._key = GrafanaExploreURLKey("https://grafana.mysugarcube.com", query, key)
-        self._task = None
-
-    def mount(self, deck, index):
-        self._key.mount(deck, index)
-        if self._task is None:
-            self._task = asyncio.ensure_future(self.update(deck, index))
-            # self._task.add_done_callback(print)
-
-    def unmount(self, deck, index):
-        self._key.unmount(deck, index)
-        if self._task is not None:
-            self._task.cancel()
-            self._task = None
-
-    async def on_press(self, deck, index):
-        await self._key.on_press(deck, index)
-
-    async def on_release(self, deck, index):
-        await self._key.on_release(deck, index)
 
     async def update(self, deck, index):
         while True:
             to_set = await self.query()
-            await self._key.set_value(deck, index, **to_set)
+            await self.set_value(deck, index, **to_set)
             await asyncio.sleep(30)
 
     async def query(self):

@@ -15,9 +15,9 @@ class MultiKey(Key):
         width: Optional[int] = None,
         height: Optional[int] = None,
         image: Optional[Image.Image] = None,
+        **kwargs
     ):
-        super().__init__()
-        self._key = key
+        super().__init__(key=key, **kwargs)
         self._width = width
         self._height = height
         if isinstance(image, str):
@@ -28,8 +28,6 @@ class MultiKey(Key):
         self._key_crop_rects = {}
 
     def mount(self, deck: Deck, index: int) -> None:
-        if self._key is not None:
-            self._key.mount(deck, index)
         y, x = divmod(index, deck.key_layout[1])
         width = min(self._width or deck.key_layout[1], deck.key_layout[1] - x)
         height = min(self._height or deck.key_layout[0], deck.key_layout[0] - y)
@@ -52,24 +50,16 @@ class MultiKey(Key):
             self._image = Image.new("RGB", size)
         else:
             self._image = self._initial_image.resize(size)
-        self.draw(deck)
+        super().mount(deck, index)
 
     def unmount(self, deck: Deck, index: int) -> None:
-        if self._key is not None:
-            self._key.unmount(deck, index)
         self._rect = None
         self._image = None
         self._key_crop_rects = {}
+        super().unmount(deck, index)
 
-    async def on_press(self, deck: Deck, index: int) -> None:
-        if self._key is not None:
-            await self._key.on_press(deck, index)
-
-    async def on_release(self, deck: Deck, index: int) -> None:
-        if self._key is not None:
-            await self._key.on_release(deck, index)
-
-    def draw(self, deck: Deck, image: Optional[Image.Image] = None):
+    def draw(self, deck: Deck, index: int, image: Optional[Image.Image] = None):
+        super().draw(deck, index)
         # Safety check.
         if self._image is None:
             raise ValueError("cannot call draw() before mounting")
@@ -92,11 +82,13 @@ class MultiKeyProxy(Key):
         self._parent = weakref.ref(parent)
 
     async def on_press(self, deck: Deck, index: int) -> None:
+        await super().on_press(deck, index)
         parent = self._parent()
         if parent is not None:
             await parent.on_press(deck, index)
 
     async def on_release(self, deck: Deck, index: int) -> None:
+        await super().on_release(deck, index)
         parent = self._parent()
         if parent is not None:
             await parent.on_release(deck, index)

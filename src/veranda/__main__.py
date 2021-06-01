@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from . import kubernetes, prometheus
 from .beachball import BeachballScene
@@ -18,6 +19,9 @@ from .keys import (
 )
 from .keys.base import Key
 from .rabbitmq import RabbitMQScene
+
+
+DEBUG = False
 
 
 class HackKey(Key):
@@ -116,10 +120,17 @@ async def init():
     deck.push_scene(InitialScene())
 
 
+def handle_exception(loop, context):
+    print(context["message"])
+
+
 def main():
-    # logging.basicConfig(level=logging.DEBUG)
+    if DEBUG:
+        logging.basicConfig(level=logging.DEBUG)
     loop = asyncio.get_event_loop()
-    # loop.set_debug(True)
+    if DEBUG:
+        loop.set_debug(True)
+    loop.set_exception_handler(handle_exception)
     try:
         asyncio.ensure_future(init())
         loop.run_forever()

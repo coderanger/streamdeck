@@ -30,7 +30,7 @@ class TextKey(Key):
         self._label_color = label_color or color
         self._background = background
 
-    def mount(self, deck, index):
+    def draw(self, deck, index):
         image = create_image(deck, self._background)
         draw = ImageDraw.Draw(image)
         fit_width = image.width - 10
@@ -58,7 +58,7 @@ class TextKey(Key):
             self._text = text
         if color is not NOT_PRESENT:
             self._color = color
-        self.mount(deck, index)
+        self.draw(deck, index)
 
     # async def on_press(self, deck, index):
     #     # FOR TESTING

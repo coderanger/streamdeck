@@ -5,6 +5,7 @@ import itertools
 from PIL import Image, ImageSequence
 from StreamDeck.ImageHelpers.PILHelper import to_native_format
 
+from ..deck import Deck
 from .base import Key
 
 
@@ -15,12 +16,12 @@ class ImageKey(Key):
             image = Image.open(image).convert("RGB")
         self._image = image
 
-    def mount(self, deck, index):
+    def draw(self, deck, index):
         deck.set_key_image(index, self._image)
 
 
 class AnimatedKey(Key):
-    def __init__(self, paths, speed=None, **kwargs):
+    def __init__(self, paths: list[str], speed=None, **kwargs):
         super().__init__(**kwargs)
         # Expand a single glob.
         if isinstance(paths, str):
@@ -39,21 +40,14 @@ class AnimatedKey(Key):
         self._frames = [(f.convert("RGB"), d) for f, d in frame_source]
         self._task = None
 
-    def mount(self, deck, index):
+    def mount(self, deck: Deck, index: int):
         self._native_frames = itertools.cycle(
             (to_native_format(deck._deck, f), d) for f, d in self._frames
         )
-        if self._task is None:
-            self._task = asyncio.ensure_future(self.update(deck, index))
+        super().mount(deck, index)
 
-    def unmount(self, deck, index):
-        if self._task is not None:
-            self._task.cancel()
-            self._task = None
-        super().unmount(deck, index)
-
-    async def update(self, deck, index):
-        while True:
+    async def update(self, deck: Deck, index: int):
+        while self._mounted:
             image, delay = next(self._native_frames)
             deck.set_key_image(index, image)
             await asyncio.sleep(delay / 1000)

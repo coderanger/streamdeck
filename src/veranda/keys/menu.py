@@ -10,36 +10,19 @@ from .base import Key
 
 
 class MenuKey(Key):
-    def __init__(self, key: Key, scene: Optional[Scene] = None):
-        super().__init__()
-        self._key = key
+    def __init__(self, key: Key, scene: Optional[Scene] = None, **kwargs):
+        super().__init__(key=key, **kwargs)
         self._scene = scene
 
     async def on_press(self, deck, index):
+        await super().on_press(deck, index)
         deck.push_scene(MenuAnimationScene(self, index, self._scene))
-
-    def mount(self, deck, index):
-        self._key.mount(deck, index)
-
-    def unmount(self, deck, index):
-        self._key.unmount(deck, index)
 
 
 class PopSceneKey(Key):
-    def __init__(self, key: Optional[Key] = None):
-        super().__init__()
-        self._key = key
-
     async def on_press(self, deck, index):
+        await super().on_press(deck, index)
         deck.pop_scene()
-
-    def mount(self, deck, index):
-        if self._key is not None:
-            self._key.mount(deck, index)
-
-    def unmount(self, deck, index):
-        if self._key is not None:
-            self._key.unmount(deck, index)
 
 
 class MenuAnimationScene(Scene):

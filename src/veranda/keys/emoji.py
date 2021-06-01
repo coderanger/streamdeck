@@ -1,5 +1,6 @@
 from PIL import Image
 
+from ..deck import Deck
 from .base import Key
 
 
@@ -11,7 +12,7 @@ class EmojiKey(Key):
         self._image = Image.open(path).convert("RGBA")
         self._background = background
 
-    def mount(self, deck, index):
+    def draw(self, deck: Deck, index: int) -> None:
         image_format = deck.key_image_format()
         canvas = Image.new("RGBA", image_format["size"], self._background)
         canvas.alpha_composite(

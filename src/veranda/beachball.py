@@ -41,5 +41,5 @@ class BeachballScene(Scene):
             elapsed = time.monotonic() - start_time
             rotation = (elapsed * self.speed * -1) % 360
             img = start_img.rotate(rotation, Image.BILINEAR)
-            key.draw(deck, img)
+            key.draw(deck, 2, image=img)
             await asyncio.sleep(0.05)

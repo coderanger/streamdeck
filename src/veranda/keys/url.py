@@ -7,23 +7,13 @@ from .base import Key
 
 
 class URLKey(Key):
-    def __init__(self, url, key, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, url: str, key: Key, **kwargs):
+        super().__init__(key=key, **kwargs)
         self._url = url
-        self._key = key
-
-    def mount(self, deck, index):
-        self._key.mount(deck, index)
-
-    def unmount(self, deck, index):
-        self._key.unmount(deck, index)
 
     async def on_press(self, deck, index):
+        await super().on_press(deck.index)
         webbrowser.open(self._url, new=2)
-        await self._key.on_press(deck, index)
-
-    async def set_value(self, deck, index, **kwargs):
-        await self._key.set_value(deck, index, **kwargs)
 
 
 class GrafanaExploreURLKey(URLKey):

@@ -1,6 +1,7 @@
 from PIL import ImageDraw
 from StreamDeck.ImageHelpers.PILHelper import create_image
 
+from ..deck import Deck
 from .base import NOT_PRESENT, Key
 
 
@@ -27,7 +28,13 @@ class SparklineKey(Key):
         self._background_upper = background_upper
         self._background_lower = background_lower
 
-    def mount(self, deck, index):
+    async def set_value(self, deck, index, values=NOT_PRESENT):
+        await super().set_value(deck, index, values)
+        if values is not NOT_PRESENT:
+            self._values = values
+        self.draw(deck, index)
+
+    def draw(self, deck: Deck, index: int) -> None:
         image = create_image(deck, self._background_upper)
         draw = ImageDraw.Draw(image)
         yoffset = (image.height - self._draw_height) // 2
@@ -57,11 +64,6 @@ class SparklineKey(Key):
         # Draw the line.
         draw.line(coords, self._color, self._line_width, "curve")
         deck.set_key_image(index, image)
-
-    async def set_value(self, deck, index, values=NOT_PRESENT):
-        if values is not NOT_PRESENT:
-            self._values = values
-        self.mount(deck, index)
 
     # async def on_press(self, deck, index):
     #     # FOR TESTING
