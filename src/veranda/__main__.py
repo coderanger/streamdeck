@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 
 from . import kubernetes, prometheus
 from .beachball import BeachballScene
@@ -121,7 +122,12 @@ async def init():
 
 
 def handle_exception(loop, context):
-    print(context["message"])
+    if "exception" in context:
+        exc = context["exception"]
+        traceback.print_tb(exc.__traceback__)
+        print(str(exc))
+    else:
+        print(context["message"])
 
 
 def main():
