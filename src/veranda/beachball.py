@@ -28,10 +28,11 @@ class BeachballScene(Scene):
             self._task = asyncio.ensure_future(self.update(deck))
         super().mount(deck)
 
-    def unmount(self, _) -> None:
+    def unmount(self, deck: Deck) -> None:
         if self._task is not None:
             self._task.cancel()
             self._task = None
+        super().unmount(deck)
 
     async def update(self, deck: Deck):
         start_time = time.monotonic()

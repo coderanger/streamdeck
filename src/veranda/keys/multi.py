@@ -53,6 +53,11 @@ class MultiKey(Key):
         super().mount(deck, index)
 
     def unmount(self, deck: Deck, index: int) -> None:
+        # Unmount the proxy keys.
+        key_indexes = iter(self._key_crop_rects.keys())
+        next(key_indexes)  # Skip the first.
+        for index in key_indexes:
+            deck[index] = None
         self._rect = None
         self._image = None
         self._key_crop_rects = {}
